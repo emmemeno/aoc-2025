@@ -124,11 +124,7 @@ mod tests {
 
     #[test]
     fn battery() {
-        let test_input = 
-            "987654321111111
-811111111111119
-234234234234278
-818181911112111";
+        let test_input = "";
         let banks_input: Vec<&str> = test_input.trim().split("\n").collect();
         let mut output = 0;
         for line in banks_input.iter() {

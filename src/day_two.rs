@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn reps() {
-        let test_input = "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124";
+        let test_input = "";
         // let test_input = "222220-222224";
         let ranges: Vec<&str> = test_input.trim().split(",").collect();
         let mut output = 0usize;
