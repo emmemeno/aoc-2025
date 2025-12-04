@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-
 pub fn part_one() {
     println!("Hello Day 4 - part 1!");
     let input = super::load_input("input/input-day4");
@@ -8,6 +7,16 @@ pub fn part_one() {
     let grid = Grid::from_lines(lines);
     let output = grid.part_one();
     println!("Final Output: {output}");
+}
+
+pub fn part_two() {
+    println!("Hello Day 4 - part 2!");
+    let input = super::load_input("input/input-day4");
+    let lines: Vec<&str> = input.trim().split("\n").collect();
+    let mut grid = Grid::from_lines(lines);
+    let output = grid.part_two();
+    grid.print();
+    println!("\nFinal Output: {output}");
 }
 
 struct Grid {
@@ -63,11 +72,7 @@ impl Grid {
 
     fn part_one(&self) -> u32 {
         let mut output = 0;
-        let mut visual = String::new();
         for (n,v) in self.values.iter().enumerate() {
-            if n != 0 && n as u32 % self.size.0 == 0 { 
-                visual = format!("{visual}\n");
-            }
             if *v {
                 let (x, y) = (n as u32 % self.size.0, n as u32 / self.size.0);
                 let nb_counter = self.get_neighbour_count((x,y));
@@ -79,7 +84,7 @@ impl Grid {
         output
     }
 
-    fn part_one_visual(&self) {
+    fn print(&self) {
 
         let mut visual = String::new();
         for (n,v) in self.values.iter().enumerate() {
@@ -100,6 +105,35 @@ impl Grid {
         }
         println!("{visual}");
     }
+
+    fn process(&mut self) -> u32 {
+        // same as part one, but consume the values (true -> false)
+        let mut output = 0;
+        for n in 0..self.values.len() {
+            if self.values[n] {
+                let (x, y) = (n as u32 % self.size.0, n as u32 / self.size.0);
+                let nb_counter = self.get_neighbour_count((x,y));
+                if nb_counter < 4 {
+                    self.values[n] = false;
+                    output += 1;
+                } 
+            }
+        }
+        output
+    }
+
+    fn part_two(&mut self) -> u32{
+        let mut output = 0;
+        loop {
+           let pass = self.process();
+           if pass != 0 {
+               output += pass;
+           } else {
+               break
+           }
+        }
+        output
+    }
 }
 
 #[cfg(test)]
@@ -108,28 +142,10 @@ mod tests {
 
     #[test]
     fn grid() {
-        let test_input =
-            "..@@.@@@@.
-@@@.@.@.@@
-@@@@@.@.@@
-@.@@@@..@.
-@@.@@@@.@@
-.@@@@@@@.@
-.@.@.@.@@@
-@.@@@.@@@@
-.@@@@@@@@.
-@.@.@@@.@.
-";
+        let test_input = "";
         let lines: Vec<&str> = test_input.trim().split("\n").collect();
-        // let mut output = 0;
-        let grid = Grid::from_lines(lines);
-        // let pos = (0,0);
-        // let counter_at_pos = grid.get_neighbour_count(pos);
-        // println!("Paper NB at pos {pos:?}: {counter_at_pos}");
-        // println!("Final Output: {output}");
-        // let test = grid.get_neighbour_count((9,4));
-        // println!("{test}");
-        let output = grid.part_one();
+        let mut grid = Grid::from_lines(lines);
+        let output = grid.part_two();
         println!("{output}");
     }
 
