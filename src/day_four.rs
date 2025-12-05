@@ -10,13 +10,13 @@ pub fn part_one() {
 }
 
 pub fn part_two() {
-    println!("Hello Day 4 - part 2!");
+    // println!("Hello Day 4 - part 2!");
     let input = super::load_input("input/input-day4");
     let lines: Vec<&str> = input.trim().split("\n").collect();
     let mut grid = Grid::from_lines(lines);
     let output = grid.part_two();
-    grid.print();
-    println!("\nFinal Output: {output}");
+    // grid.print();
+    // println!("\nFinal Output: {output}");
 }
 
 struct Grid {

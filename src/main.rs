@@ -2,6 +2,7 @@ mod day_one;
 mod day_two;
 mod day_three;
 mod day_four;
+mod day_five;
 
 use std::{fs::File, io::Read};
 use std::time::Instant;
@@ -22,7 +23,10 @@ fn main() {
     // day_three::part_one();
     // day_three::part_two();
     // day_four::part_one();
-    day_four::part_two();
+    // day_four::part_two();
+    // day_five::part_one();
+    day_five::part_two();
+
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
 }
