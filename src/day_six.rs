@@ -1,4 +1,4 @@
-use std::num::ParseIntError;
+#![allow(dead_code)]
 
 #[derive(Debug)]
 enum Operator {
@@ -18,7 +18,6 @@ impl<'a> Math<'a> {
         let mut rows: Vec<Vec<&str>> = vec![];
         let mut operators = vec![];
         let mut input_lines: Vec<&str> = input.lines().collect();
-        println!("Input Lines: {input_lines:?}");
         // last line is operator and column width
         let last_line = input_lines.pop().unwrap();
         let columns_width = get_column_width(last_line);
@@ -34,22 +33,19 @@ impl<'a> Math<'a> {
         for n in 0..input_lines.len() {
             let mut row_of_cells = vec![];
             let mut new_line = input_lines[n];
-            let mut cell = "";
             for (c, col_width) in columns_width.iter().enumerate() {
-                // println!("Split row {n} at: {col_width}");
                 if c == columns_width.len() - 1 {
                     row_of_cells.push(&new_line[0..]);
                     break
                 }
-                cell = &new_line[0..(*col_width as usize)];
+                let cell = &new_line[0..(*col_width as usize)];
                 row_of_cells.push(cell);
                 (_, new_line) = new_line.split_at(*col_width as usize + 1);
-                // println!("Cell: -{cell}-, newline: -{new_line}-");
+                // pkrintln!("Cell: -{cell}-, newline: -{new_line}-");
             }
             rows.push(row_of_cells);
         }
        
-        println!("{rows:?}");
         Self { rows, operators, columns_width }
     }
 
@@ -80,7 +76,17 @@ impl<'a> Math<'a> {
         output
     }
 
-    fn part_two(&self) -> u64 {
+    fn print_column(&self, col: usize) {
+        let col_width = self.columns_width.get(col).expect("Wrong col {col} to visualize");
+        let header = "_".repeat(*col_width as usize + 2);
+        println!("{header}");
+        for row in self.rows.iter() {
+            println!("|{}|", row[col]);
+        }
+        println!("{header}");
+    }
+
+    pub fn part_two(&self) -> u64 {
         let mut output = 0u64;
         for (col, width) in self.columns_width.iter().enumerate() {
             let mut col_output = 0u64;
@@ -171,6 +177,10 @@ mod tests {
         // println!("{splitted:?}");
         let math = Math::from_input(test_input);
         let output = math.part_two();
+
+        let col_to_print = 3;
+        println!("Printing column {col_to_print}:");
+        math.print_column(col_to_print);
         println!("Part Two Test Input Output: {output}");
     }
 

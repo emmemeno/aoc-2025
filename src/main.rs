@@ -27,7 +27,8 @@ fn main() {
     // day_four::part_two();
     // day_five::part_one();
     // day_five::part_two();
-    day_six::part_one();
+    // day_six::part_one();
+    day_six::part_two();
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
