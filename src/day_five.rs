@@ -96,6 +96,32 @@ impl Database {
     
 }
 
+fn get_column_width(operator_line: &str) -> Vec<u8> {
+    let mut widths = Vec::new();
+
+    for c in operator_line.chars() {
+        let mut count = 1u8;
+        let mut in_whitespace = false;
+        if c.is_whitespace() {
+            if in_whitespace {
+                // continuing a whitespace run
+                count += 1;
+            } else {
+                // starting a new whitespace run
+                in_whitespace = true;
+                count = 2;
+            }
+        } else {
+            if in_whitespace {
+                // we just finished a whitespace run
+                widths.push(count);
+                in_whitespace = false;
+            }
+        }
+    }
+    widths
+}
+
 pub fn part_one() {
     println!("Hello Day 5 - part 1!");
     let input = super::load_input("input/input-day5");

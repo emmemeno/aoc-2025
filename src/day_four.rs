@@ -16,7 +16,7 @@ pub fn part_two() {
     let mut grid = Grid::from_lines(lines);
     let output = grid.part_two();
     // grid.print();
-    // println!("\nFinal Output: {output}");
+    println!("\nFinal Output: {output}");
 }
 
 struct Grid {
@@ -30,6 +30,7 @@ impl Grid {
             lines.first().unwrap().len() as u32,
             lines.len() as u32
         );
+        #[allow(unused_assignments)]
         let mut values: Vec<bool> = Vec::with_capacity((size.0 * size.1) as usize); 
         values = lines
             .iter()
