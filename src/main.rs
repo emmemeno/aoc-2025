@@ -5,7 +5,7 @@ mod day_four;
 mod day_five;
 mod day_six;
 mod day_seven;
-
+mod day_eight;
 use std::{fs::File, io::Read};
 use std::time::Instant;
 fn load_input(file_name: &str) -> String {
@@ -30,7 +30,14 @@ fn main() {
     // day_five::part_two();
     // day_six::part_one();
     // day_six::part_two();
-    day_seven::part_two(&load_input("input/input-day7"));
+    // day_seven::part_two(&load_input("input/input-day7"));
+    day_eight::part_one();
+    
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
+
+    let now = Instant::now();
+    day_eight::part_two();
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
