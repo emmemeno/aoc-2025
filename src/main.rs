@@ -11,6 +11,7 @@ mod day_nine;
 use std::{fs::File, io::Read};
 use std::time::Instant;
 
+#[allow(unused)]
 enum InputMode {
     Example,
     Normal,
