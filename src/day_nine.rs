@@ -1,6 +1,5 @@
-// #![allow(dead_code)]
+#![allow(dead_code)]
 
-use std::cmp::Ordering;
 use std::fmt::Display;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -134,14 +133,22 @@ fn parse_red_tiles(mode: super::InputMode) -> Vec<Tile> {
     let input: String;
     match mode {
         crate::InputMode::Example => {
-            input = "7,1
-11,1
-11,7
-9,7
+            input = "1,5
+3,5
+3,8
+7,8
+7,5
 9,5
-2,5
-2,3
-7,3"
+9,10
+11,10
+11,3
+6,3
+6,7
+4,7
+4,1
+13,1
+13,12
+1,12"
             .to_string();
         }
         crate::InputMode::Normal => {
@@ -175,7 +182,7 @@ pub fn part_one() {
 }
 
 pub fn part_two() {
-    let red_tiles = parse_red_tiles(super::InputMode::Normal);
+    let red_tiles = parse_red_tiles(super::InputMode::Example);
     let floor = Floor::from_red_tiles(red_tiles);
     // println!("{floor}");
     let largest_area = floor.largest_area();
