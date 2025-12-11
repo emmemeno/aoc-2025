@@ -5,10 +5,11 @@ use std::{cell::RefCell, fmt::Display, rc::Rc};
 use crate::InputMode;
 
 type NodeId = [char; 3];
+type Path = Vec<Rc<RefCell<Node>>>;
 
 struct Node {
     id: NodeId,
-    output_links: Vec<Rc<RefCell<Node>>>
+    output_links: Vec<Rc<RefCell<Node>>>,
 }
 
 impl Display for Node {
@@ -24,9 +25,12 @@ impl Display for Node {
 
 impl Node {
     fn from_str(input: &str) -> Self {
-        let (part_one, _) = input.split_once(":").unwrap(); 
+        let (part_one, _) = input.split_once(":").unwrap();
         let id: NodeId = part_one.chars().collect::<Vec<_>>().try_into().unwrap();
-        Self {id, output_links: vec![] }
+        Self {
+            id,
+            output_links: vec![],
+        }
     }
     fn add_connection(&mut self, new_link: Rc<RefCell<Node>>) {
         self.output_links.push(new_link);
@@ -34,32 +38,31 @@ impl Node {
 }
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id   // compare only this field
+        self.id == other.id // compare only this field
     }
 }
 
 impl Eq for Node {}
 struct Graph {
-    nodes: Vec<Rc<RefCell<Node>>>
+    nodes: Vec<Rc<RefCell<Node>>>,
 }
 
 impl Graph {
     fn new() -> Self {
         Self { nodes: vec![] }
-
     }
 
     fn get_node(&self, key: NodeId) -> Option<Rc<RefCell<Node>>> {
         return self.nodes.iter().find_map(|n| {
             if n.borrow().id == key {
                 Some(n.clone())
-            }  else {
+            } else {
                 None
             }
         });
     }
 
-    fn add_node(&mut self, node: Node) -> bool{
+    fn add_node(&mut self, node: Node) -> bool {
         if self.nodes.iter().any(|n| n.borrow().id == node.id) {
             return false;
         } else {
@@ -69,7 +72,7 @@ impl Graph {
     }
 
     fn add_connections_from_str(&mut self, input_line: &str) -> Result<String, String> {
-        let (part_one, part_two) = input_line.split_once(":").unwrap(); 
+        let (part_one, part_two) = input_line.split_once(":").unwrap();
         let parent_id: NodeId = part_one.chars().collect::<Vec<_>>().try_into().unwrap();
         let parent_node = if let Some(n) = self.get_node(parent_id) {
             n
@@ -89,39 +92,47 @@ impl Graph {
         return Ok("Connections created".to_string());
     }
 
-    fn pathfinding(&self, from: NodeId, to: NodeId, mut current_path: Vec<Rc<RefCell<Node>>>) -> Vec<Rc<RefCell<Node>>>{
+    fn pathfinding(
+        &self,
+        from: NodeId,
+        to: NodeId,
+        mut current_path: Path,
+        completed_paths: &mut Vec<Path>,
+    ) {
+        let max_distance = 50;
         // if no path, add the starting point
         if current_path.len() == 0 {
             current_path.push(self.get_node(from).unwrap());
         }
         // set frontier at last visited path node
         let frontier = current_path.last().unwrap().clone();
-        let max_distance = 100;
-            if frontier.borrow().id == to {
-                println!("Target reached");
-                return current_path;
+        if frontier.borrow().id == to {
+            println!("Target reached");
+            completed_paths.push(current_path);
+            return;
+        }
+        if current_path.len() >= max_distance {
+            println!("bau");
+            return;
+        }
+        for child in frontier.borrow().output_links.iter() {
+            // println!("From {} to {}", frontier.borrow(), child.borrow());
+            // dont visit the same node two times
+            if !current_path.contains(child) {
+                current_path.push(child.clone());
+                self.pathfinding(from, to, current_path.clone(), completed_paths);
+            } else {
+                continue;
             }
-            for child in frontier.borrow().output_links.iter() {
-                // println!("From {} to {}", frontier.borrow(), child.borrow());
-                // dont visit the same node two times 
-                if !current_path.contains(child) {
-                    println!("bau");
-                    current_path.push(child.clone());
-                    current_path = self.pathfinding(from, to, current_path.clone());
-                } else {
-                    break;
-                }
-            }
-        unreachable!();
+        }
     }
-
 }
 
 impl Display for Graph {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::new();
         for node in self.nodes.iter() {
-           output = format!("{}{}", output, node.borrow()); 
+            output = format!("{}{}", output, node.borrow());
         }
         write!(f, "{}", output)
     }
@@ -129,7 +140,10 @@ impl Display for Graph {
 
 fn generate_graph(input: String) -> Graph {
     // first create all nodes:
-    let out_node = Node { id: ['o','u','t'], output_links: vec![] };
+    let out_node = Node {
+        id: ['o', 'u', 't'],
+        output_links: vec![],
+    };
     let mut graph = Graph::new();
     graph.add_node(out_node);
     for line in input.lines() {
@@ -146,18 +160,21 @@ fn parse(mode: InputMode) -> Graph {
     let input: String;
     match mode {
         InputMode::Example => {
-            input =
-                "aaa: you hhh
-you: bbb ccc
-bbb: ddd eee
-ccc: ddd eee fff
-ddd: ggg
-eee: out
-fff: out
+            input = "svr: aaa bbb
+aaa: fft
+fft: ccc
+bbb: tty
+tty: ccc
+ccc: ddd eee
+ddd: hub
+hub: fff
+eee: dac
+dac: fff
+fff: ggg hhh
 ggg: out
-hhh: ccc fff iii
-iii: out
-".to_string();
+hhh: out
+"
+            .to_string();
         }
         InputMode::Normal => {
             input = super::load_input("input/input-day11");
@@ -167,12 +184,42 @@ iii: out
 }
 
 pub fn part_one() {
-    let graph = parse(InputMode::Example);
-    println!("{graph}");
-    let path = graph.pathfinding(['y','o','u'], ['o','u','t'], vec![]);
+    let graph = parse(InputMode::Normal);
+    // println!("{graph}");
+    let mut paths: Vec<Path> = vec![];
+    graph.pathfinding(['y', 'o', 'u'], ['o', 'u', 't'], vec![], &mut paths);
+    println!("Part One Output: {}", paths.len());
+}
+
+pub fn part_two() {
+    let graph = parse(InputMode::Normal);
+    // println!("{graph}");
+    let mut paths: Vec<Path> = vec![];
+    graph.pathfinding(['f', 'f', 't'], ['o', 'u', 't'], vec![], &mut paths);
+    // filter out paths without required nodes
+    paths = paths
+        .into_iter()
+        .filter(|p| {
+            let mut has_dac = false;
+            let mut has_fft = false;
+            for node in p.iter() {
+                if node.borrow().id == ['d', 'a', 'c'] {
+                    has_dac = true;
+                }
+                if node.borrow().id == ['f', 'f', 't'] {
+                    has_fft = true;
+                }
+            }
+            if has_dac && has_fft {
+                return true;
+            } else {
+                return false;
+            }
+        })
+        .collect();
+    println!("Part Two Output: {}", paths.len());
     println!("What now?");
     // for n in path {
     //     println!("{}", n.borrow());
     // }
-
 }
