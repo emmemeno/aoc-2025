@@ -10,6 +10,7 @@ type Path = Vec<Rc<RefCell<Node>>>;
 struct Node {
     id: NodeId,
     output_links: Vec<Rc<RefCell<Node>>>,
+    visited: bool
 }
 
 impl Display for Node {
@@ -30,6 +31,7 @@ impl Node {
         Self {
             id,
             output_links: vec![],
+            visited: false,
         }
     }
     fn add_connection(&mut self, new_link: Rc<RefCell<Node>>) {
@@ -99,31 +101,22 @@ impl Graph {
         mut current_path: Path,
         completed_paths: &mut Vec<Path>,
     ) {
-        let max_distance = 50;
         // if no path, add the starting point
         if current_path.len() == 0 {
             current_path.push(self.get_node(from).unwrap());
         }
         // set frontier at last visited path node
         let frontier = current_path.last().unwrap().clone();
+        frontier.borrow_mut().visited = true;
         if frontier.borrow().id == to {
-            println!("Target reached");
             completed_paths.push(current_path);
+            print!(".");
             return;
         }
-        if current_path.len() >= max_distance {
-            println!("bau");
-            return;
-        }
-        for child in frontier.borrow().output_links.iter() {
-            // println!("From {} to {}", frontier.borrow(), child.borrow());
-            // dont visit the same node two times
-            if !current_path.contains(child) {
-                current_path.push(child.clone());
-                self.pathfinding(from, to, current_path.clone(), completed_paths);
-            } else {
-                continue;
-            }
+        for child in frontier.borrow_mut().output_links.iter() {
+            current_path.push(child.clone());
+            self.pathfinding(from, to, current_path.clone(), completed_paths);
+            child.borrow_mut().visited = false;
         }
     }
 }
@@ -143,6 +136,7 @@ fn generate_graph(input: String) -> Graph {
     let out_node = Node {
         id: ['o', 'u', 't'],
         output_links: vec![],
+        visited: false
     };
     let mut graph = Graph::new();
     graph.add_node(out_node);
@@ -172,8 +166,7 @@ eee: dac
 dac: fff
 fff: ggg hhh
 ggg: out
-hhh: out
-"
+hhh: out"
             .to_string();
         }
         InputMode::Normal => {
@@ -188,6 +181,11 @@ pub fn part_one() {
     // println!("{graph}");
     let mut paths: Vec<Path> = vec![];
     graph.pathfinding(['y', 'o', 'u'], ['o', 'u', 't'], vec![], &mut paths);
+    // for path in paths.iter() {
+    //     for node in path.iter() {
+    //         println!("{}", node.borrow());
+    //     }
+    // }
     println!("Part One Output: {}", paths.len());
 }
 
@@ -195,28 +193,32 @@ pub fn part_two() {
     let graph = parse(InputMode::Normal);
     // println!("{graph}");
     let mut paths: Vec<Path> = vec![];
-    graph.pathfinding(['f', 'f', 't'], ['o', 'u', 't'], vec![], &mut paths);
+    // this works:
+    // graph.pathfinding(['d', 'a', 'c'], ['o', 'u', 't'], vec![], &mut paths);
+    // this is slow:
+    // graph.pathfinding(['f', 'f', 't'], ['d', 'a', 'c'], vec![], &mut paths);
+    graph.pathfinding(['s', 'v', 'r'], ['f', 'f', 't'], vec![], &mut paths);
     // filter out paths without required nodes
-    paths = paths
-        .into_iter()
-        .filter(|p| {
-            let mut has_dac = false;
-            let mut has_fft = false;
-            for node in p.iter() {
-                if node.borrow().id == ['d', 'a', 'c'] {
-                    has_dac = true;
-                }
-                if node.borrow().id == ['f', 'f', 't'] {
-                    has_fft = true;
-                }
-            }
-            if has_dac && has_fft {
-                return true;
-            } else {
-                return false;
-            }
-        })
-        .collect();
+    // paths = paths
+    //     .into_iter()
+    //     .filter(|p| {
+    //         let mut has_dac = false;
+    //         let mut has_fft = false;
+    //         for node in p.iter() {
+    //             if node.borrow().id == ['d', 'a', 'c'] {
+    //                 has_dac = true;
+    //             }
+    //             if node.borrow().id == ['f', 'f', 't'] {
+    //                 has_fft = true;
+    //             }
+    //         }
+    //         if has_dac && has_fft {
+    //             return true;
+    //         } else {
+    //             return false;
+    //         }
+    //     })
+    //     .collect();
     println!("Part Two Output: {}", paths.len());
     println!("What now?");
     // for n in path {
