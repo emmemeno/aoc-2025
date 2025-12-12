@@ -98,26 +98,17 @@ impl Graph {
         &self,
         from: NodeId,
         to: NodeId,
-        mut current_path: Path,
-        completed_paths: &mut Vec<Path>,
-    ) {
-        // if no path, add the starting point
-        if current_path.len() == 0 {
-            current_path.push(self.get_node(from).unwrap());
-        }
-        // set frontier at last visited path node
-        let frontier = current_path.last().unwrap().clone();
-        frontier.borrow_mut().visited = true;
+        mut counter: u64,
+    ) -> u64 {
+        let frontier = self.get_node(from).unwrap();
         if frontier.borrow().id == to {
-            completed_paths.push(current_path);
             print!(".");
-            return;
+            return counter + 1;
         }
-        for child in frontier.borrow_mut().output_links.iter() {
-            current_path.push(child.clone());
-            self.pathfinding(from, to, current_path.clone(), completed_paths);
-            child.borrow_mut().visited = false;
+        for child in frontier.borrow().output_links.iter() {
+            counter = self.pathfinding(child.borrow().id, to, counter);
         }
+    counter
     }
 }
 
@@ -154,20 +145,7 @@ fn parse(mode: InputMode) -> Graph {
     let input: String;
     match mode {
         InputMode::Example => {
-            input = "svr: aaa bbb
-aaa: fft
-fft: ccc
-bbb: tty
-tty: ccc
-ccc: ddd eee
-ddd: hub
-hub: fff
-eee: dac
-dac: fff
-fff: ggg hhh
-ggg: out
-hhh: out"
-            .to_string();
+            input = "".to_string();
         }
         InputMode::Normal => {
             input = super::load_input("input/input-day11");
@@ -179,49 +157,22 @@ hhh: out"
 pub fn part_one() {
     let graph = parse(InputMode::Normal);
     // println!("{graph}");
-    let mut paths: Vec<Path> = vec![];
-    graph.pathfinding(['y', 'o', 'u'], ['o', 'u', 't'], vec![], &mut paths);
+    let output = graph.pathfinding(['y', 'o', 'u'], ['o', 'u', 't'], 0);
     // for path in paths.iter() {
     //     for node in path.iter() {
     //         println!("{}", node.borrow());
     //     }
     // }
-    println!("Part One Output: {}", paths.len());
+    println!("Part One Output: {}", output);
 }
 
 pub fn part_two() {
     let graph = parse(InputMode::Normal);
     // println!("{graph}");
-    let mut paths: Vec<Path> = vec![];
-    // this works:
-    // graph.pathfinding(['d', 'a', 'c'], ['o', 'u', 't'], vec![], &mut paths);
-    // this is slow:
-    // graph.pathfinding(['f', 'f', 't'], ['d', 'a', 'c'], vec![], &mut paths);
-    graph.pathfinding(['s', 'v', 'r'], ['f', 'f', 't'], vec![], &mut paths);
-    // filter out paths without required nodes
-    // paths = paths
-    //     .into_iter()
-    //     .filter(|p| {
-    //         let mut has_dac = false;
-    //         let mut has_fft = false;
-    //         for node in p.iter() {
-    //             if node.borrow().id == ['d', 'a', 'c'] {
-    //                 has_dac = true;
-    //             }
-    //             if node.borrow().id == ['f', 'f', 't'] {
-    //                 has_fft = true;
-    //             }
-    //         }
-    //         if has_dac && has_fft {
-    //             return true;
-    //         } else {
-    //             return false;
-    //         }
-    //     })
-    //     .collect();
-    println!("Part Two Output: {}", paths.len());
-    println!("What now?");
-    // for n in path {
-    //     println!("{}", n.borrow());
-    // }
+    // let output_1 = graph.pathfinding(['s', 'v', 'r'], ['f', 'f', 't'], 0);
+    // println!("SVR to FFT: {}", output_1);
+    // let output_2 = graph.pathfinding(['f', 'f', 't'], ['d', 'a', 'c'], 0);
+    // println!("FFT to DAC to Out: {}", output_2);
+    let output_3 = graph.pathfinding(['d', 'a', 'c'], ['o', 'u', 't'], 0);
+    println!("DAC to OUT: {}", output_3);
 }
