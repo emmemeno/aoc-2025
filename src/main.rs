@@ -31,7 +31,7 @@ fn main() {
 
     let now = Instant::now();
 
-    day_eleven::part_one();
+    day_eleven::part_two();
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);

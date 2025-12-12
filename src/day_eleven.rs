@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use std::{cell::RefCell, fmt::Display, rc::Rc};
 
 use crate::InputMode;
@@ -10,7 +11,6 @@ type Path = Vec<Rc<RefCell<Node>>>;
 struct Node {
     id: NodeId,
     output_links: Vec<Rc<RefCell<Node>>>,
-    visited: bool
 }
 
 impl Display for Node {
@@ -31,7 +31,6 @@ impl Node {
         Self {
             id,
             output_links: vec![],
-            visited: false,
         }
     }
     fn add_connection(&mut self, new_link: Rc<RefCell<Node>>) {
@@ -47,11 +46,16 @@ impl PartialEq for Node {
 impl Eq for Node {}
 struct Graph {
     nodes: Vec<Rc<RefCell<Node>>>,
+    memo: RefCell<HashMap<(NodeId, NodeId), u64>>,
+
 }
 
 impl Graph {
     fn new() -> Self {
-        Self { nodes: vec![] }
+        Self {
+            nodes: vec![],
+            memo: RefCell::new(HashMap::new()),
+        }
     }
 
     fn get_node(&self, key: NodeId) -> Option<Rc<RefCell<Node>>> {
@@ -94,21 +98,23 @@ impl Graph {
         return Ok("Connections created".to_string());
     }
 
-    fn pathfinding(
-        &self,
-        from: NodeId,
-        to: NodeId,
-        mut counter: u64,
-    ) -> u64 {
+    fn pathfinding(&self, from: NodeId, to: NodeId) -> u64 {
+        if let Some(&cached) = self.memo.borrow().get(&(from, to)) {
+            return cached;
+        }
         let frontier = self.get_node(from).unwrap();
         if frontier.borrow().id == to {
-            print!(".");
-            return counter + 1;
+            self.memo.borrow_mut().insert((from, to), 1);
+            return 1;
         }
+        let mut total = 0;
         for child in frontier.borrow().output_links.iter() {
-            counter = self.pathfinding(child.borrow().id, to, counter);
+            total += self.pathfinding(child.borrow().id, to);
         }
-    counter
+        
+        // Save and return result
+        self.memo.borrow_mut().insert((from, to), total);
+        total
     }
 }
 
@@ -127,7 +133,6 @@ fn generate_graph(input: String) -> Graph {
     let out_node = Node {
         id: ['o', 'u', 't'],
         output_links: vec![],
-        visited: false
     };
     let mut graph = Graph::new();
     graph.add_node(out_node);
@@ -157,7 +162,7 @@ fn parse(mode: InputMode) -> Graph {
 pub fn part_one() {
     let graph = parse(InputMode::Normal);
     // println!("{graph}");
-    let output = graph.pathfinding(['y', 'o', 'u'], ['o', 'u', 't'], 0);
+    let output = graph.pathfinding(['y', 'o', 'u'], ['o', 'u', 't']);
     // for path in paths.iter() {
     //     for node in path.iter() {
     //         println!("{}", node.borrow());
@@ -169,10 +174,8 @@ pub fn part_one() {
 pub fn part_two() {
     let graph = parse(InputMode::Normal);
     // println!("{graph}");
-    // let output_1 = graph.pathfinding(['s', 'v', 'r'], ['f', 'f', 't'], 0);
-    // println!("SVR to FFT: {}", output_1);
-    // let output_2 = graph.pathfinding(['f', 'f', 't'], ['d', 'a', 'c'], 0);
-    // println!("FFT to DAC to Out: {}", output_2);
-    let output_3 = graph.pathfinding(['d', 'a', 'c'], ['o', 'u', 't'], 0);
-    println!("DAC to OUT: {}", output_3);
+    let output_1 = graph.pathfinding(['s', 'v', 'r'], ['f', 'f', 't']);
+    let output_2 = graph.pathfinding(['f', 'f', 't'], ['d', 'a', 'c']);
+    let output_3 = graph.pathfinding(['d', 'a', 'c'], ['o', 'u', 't']);
+    println!("Part Two Output: {}", output_1 * output_2 * output_3);
 }
