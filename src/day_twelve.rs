@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use super::InputMode;
 use anyhow::Result;
-use std::{fmt::Display, ops::Index};
+use std::{fmt::Display, ops::{Index, Not}};
 
 // Some random thought about this problem
 // I could assign a score potential to a grid configuration based on empty positions '.' and its neighbour
@@ -22,7 +22,7 @@ use std::{fmt::Display, ops::Index};
 // OR....
 // Use the edge of shapes like a jigsaw puzzle
 
-#[derive(Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum Unit {
     Solid,
     Empty,
@@ -31,6 +31,36 @@ enum Unit {
 // NeighBour 4 directions
 const NB4: [(isize, isize); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
 
+type EdgeUnits<'a> = [&'a Unit; 3];
+enum EdgeSide {
+    Top,
+    Right,
+    Bottom,
+    Left
+}
+
+// !EdgeSide is the opposite edge
+impl Not for EdgeSide {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Self::Top => Self::Bottom,
+            Self::Right => Self::Left,
+            Self::Bottom => Self::Top,
+            Self::Left => Self::Right,
+        }
+    }
+}
+
+// gap position is one-dimensional
+// from left (best) to right (worst)
+// from top (best) to bottom (worst)
+enum MatchScore {
+    Incompatible,
+    PerfectFit,
+    WithGap{ gap_pos: u8 }
+}
 struct Shape {
     units: [Unit; 9],
     display: (char, char),
@@ -50,10 +80,45 @@ impl Shape {
         Self { units, display }
     }
 
-    // Original
     // 0 1 2
     // 3 4 5
     // 6 7 8
+    fn get_edge<'a>(&'a self, side: &EdgeSide) -> EdgeUnits<'a> {
+        match side {
+            EdgeSide::Top => [&self.units[0], &self.units[1], &self.units[2]],
+            EdgeSide::Right => [&self.units[2], &self.units[5], &self.units[8]],
+            EdgeSide::Bottom => [&self.units[6], &self.units[7], &self.units[7]],
+            EdgeSide::Left => [&self.units[0], &self.units[3], &self.units[6]],
+        }
+    }
+
+    fn match_edges(&self, other: Self, contact_edge: EdgeSide) -> MatchScore {
+        let this_edge = self.get_edge(&contact_edge);
+        let other_edge = other.get_edge(&!contact_edge);
+        for i in 0..3 {
+            if this_edge[i] == &Unit::Solid && other_edge[i] == &Unit::Solid {
+                return MatchScore::Incompatible
+            }
+        }
+        // from here when the unit is the same it implies its an empty,
+        // or should have returned in the loop ahead
+        if this_edge[0] != other_edge[0] && this_edge[1] != other_edge[1] && this_edge[2] != other_edge[2] {
+            return MatchScore::PerfectFit
+        }
+        if this_edge[0] == other_edge[0] && this_edge[1] != other_edge[1] && this_edge[2] != other_edge[2] {
+            return MatchScore::WithGap { gap_pos: 1 }
+        }
+        if this_edge[0] != other_edge[0] && this_edge[1] == other_edge[1] && this_edge[2] != other_edge[2] {
+            return MatchScore::WithGap { gap_pos: 2 }
+        }
+        if this_edge[0] != other_edge[0] && this_edge[1] != other_edge[1] && this_edge[2] == other_edge[2] {
+            return MatchScore::WithGap { gap_pos: 3 }
+        }
+        // there should not be an combinations
+        // because edge has at least 1 solid unit
+        // so max 1 gap is possible
+        unreachable!()
+    }
 
     // Flip Horizontal
     // 2 1 0
