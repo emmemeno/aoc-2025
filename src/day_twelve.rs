@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 use super::InputMode;
-use std::{fmt::Display, ops::{Index, IndexMut, Not}};
-use std::collections::HashSet;
+use std::collections::{HashMap,HashSet};
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+};
 
 // Some random thought about this problem
 // I could assign a score potential to a grid configuration based on empty positions '.' and its neighbour
@@ -31,27 +34,7 @@ enum Unit {
 // NeighBour 4 directions
 const NB4: [(isize, isize); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
 
-type EdgeUnits<'a> = [&'a Unit; 3];
-enum EdgeSide {
-    Top,
-    Right,
-    Bottom,
-    Left
-}
-
-// !EdgeSide is the opposite edge
-impl Not for EdgeSide {
-    type Output = Self;
-
-    fn not(self) -> Self::Output {
-        match self {
-            Self::Top => Self::Bottom,
-            Self::Right => Self::Left,
-            Self::Bottom => Self::Top,
-            Self::Left => Self::Right,
-        }
-    }
-}
+type ShapeId = usize;
 
 // gap position is one-dimensional
 // from left (best) to right (worst)
@@ -59,7 +42,7 @@ impl Not for EdgeSide {
 enum MatchScore {
     Incompatible,
     PerfectFit,
-    WithGap{ gap_pos: u8 }
+    WithGap { gap_pos: u8 },
 }
 #[derive(Hash, PartialEq, Eq)]
 struct Shape {
@@ -77,17 +60,20 @@ impl Shape {
                 _ => panic!(),
             }
         }
-        Self { units}
+        Self { units }
     }
 
     fn get_unit_char(&self) -> char {
-        *self.units.iter()
-            .filter_map(|u|
+        *self
+            .units
+            .iter()
+            .filter_map(|u| {
                 if let Unit::Solid(c) = u {
                     Some(c)
                 } else {
                     None
-                })
+                }
+            })
             .next()
             .unwrap()
     }
@@ -107,9 +93,7 @@ impl Shape {
         new_units[6] = self.units[8];
         new_units[7] = self.units[7];
         new_units[8] = self.units[6];
-        Self {
-            units: new_units
-        }
+        Self { units: new_units }
     }
 
     // Flip Vertical
@@ -127,9 +111,7 @@ impl Shape {
         new_units[6] = self.units[0];
         new_units[7] = self.units[1];
         new_units[8] = self.units[2];
-        Self {
-            units: new_units,
-        }
+        Self { units: new_units }
     }
 
     // Rotate Clockwise
@@ -147,9 +129,7 @@ impl Shape {
         new_units[6] = self.units[8];
         new_units[7] = self.units[5];
         new_units[8] = self.units[2];
-        Self {
-            units: new_units,
-        }
+        Self { units: new_units }
     }
 
     // Rotate CounterClockwise
@@ -167,9 +147,7 @@ impl Shape {
         new_units[6] = self.units[0];
         new_units[7] = self.units[3];
         new_units[8] = self.units[6];
-        Self {
-            units: new_units,
-        }
+        Self { units: new_units }
     }
 
     // Rotate 180 aka Flip Horizontal AND Vertical
@@ -187,11 +165,8 @@ impl Shape {
         new_units[6] = self.units[2];
         new_units[7] = self.units[1];
         new_units[8] = self.units[0];
-        Self {
-            units: new_units,
-        }
+        Self { units: new_units }
     }
-
 }
 
 // access the grid with Grid[(x, y)]
@@ -205,6 +180,7 @@ impl Index<(usize, usize)> for Shape {
         &self.units[x * 3 + y]
     }
 }
+
 impl Display for Shape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = "".to_string();
@@ -214,7 +190,7 @@ impl Display for Shape {
             }
             match unit {
                 Unit::Solid(c) => output = format!("{output}{}", c),
-                Unit::Empty => output = format!("{output}." ),
+                Unit::Empty => output = format!("{output}."),
             }
         }
         write!(f, "{}", output)
@@ -257,8 +233,7 @@ impl Grid {
             if self.check_out_of_grid(pos_to_check) {
                 continue;
             }
-            if let Unit::Empty = self[((pos_to_check.0) as usize, (pos_to_check.1) as usize)] 
-            {
+            if let Unit::Empty = self[((pos_to_check.0) as usize, (pos_to_check.1) as usize)] {
                 counter += 1;
             }
         }
@@ -271,6 +246,20 @@ impl Grid {
         })
     }
 
+    // this return a map with empty units index and number of its neihbourhood as value
+    fn get_units_by_nb_priority(&self) -> Vec<usize> {
+        let mut priority: Vec<(usize, u8)> = self.units.iter().enumerate().filter_map(|(n, u)| {
+            if *u == Unit::Empty {
+                let (unit_id, nb_count) = (n, self.count_empty_neighbour((n % self.width, n / self.width)));
+                Some((unit_id, nb_count))
+            } else {
+                None
+            }
+        }).collect();
+        priority.sort_by_key(|p| p.1);
+        priority.iter().map(|p| p.0).collect()
+
+    }
     // fn apply_shape(&mut self, shape: &Shape, at_pos: (usize, usize)) {
     //     for (n, unit) in shape.units.iter().enumerate() {
     //         let shape_pos = ((n % 3), (n / 3));
@@ -307,6 +296,7 @@ impl Index<(usize, usize)> for Grid {
 
     fn index(&self, (x, y): (usize, usize)) -> &Self::Output {
         if x >= self.width || y >= self.height {
+            println!("Error Grid Index: {x}, {y}");
             panic!("Grid: Out of index");
         }
         &self.units[y * self.width + x]
@@ -315,7 +305,7 @@ impl Index<(usize, usize)> for Grid {
 
 impl IndexMut<(usize, usize)> for Grid {
     fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut Self::Output {
-        if x >= self.width || y >= self.height {
+        if x > self.width || y > self.height {
             panic!("Grid: Out of index");
         }
         &mut self.units[y * self.width + x]
@@ -336,9 +326,11 @@ impl<'a> Iterator for GridIterator<'a> {
     }
 }
 
+#[derive(Clone)]
 struct Ground {
     grid: Grid,
     required_shapes: [u8; 6],
+    checked_units: Vec<usize>,
 }
 impl Ground {
     fn from_str(input: &str) -> Self {
@@ -353,9 +345,14 @@ impl Ground {
         Self {
             grid,
             required_shapes,
+            checked_units: vec![]
         }
     }
 
+    fn unit_checked(&mut self, pos: (usize, usize)) {
+        let unit_id = pos.1 * self.grid.width + pos.0;
+        self.checked_units.push(unit_id);
+    }
 }
 
 fn parse(mode: InputMode) -> (Vec<Ground>, Vec<Shape>) {
@@ -425,82 +422,132 @@ fn shape_variants(original: Shape) -> HashSet<Shape> {
     variants
 }
 
-// return the best grid configuration with shape applied
-fn arrange_shape_at_pos<'a>(grid: &Grid, pos: (usize, usize), shape_variants: &'a HashSet<Shape>) -> Option<Grid> {
+// return the best grid configuration with selected shape applied
+fn fit_shape_at_pos<'a>(
+    grid: &Grid,
+    pos: (usize, usize),
+    shapes: &[(usize, &HashSet<Shape>)],
+) -> Option<(Grid, usize)> {
     // out of grid
-    if pos.0 + 2 > grid.width || pos.1 + 2 > grid.height {
-        return None
+    if pos.0 + 2 >= grid.width || pos.1 + 2 >= grid.height {
+        return None;
     }
-    let mut configs: Vec<(Grid, u16)> = vec![];
-    for variant in shape_variants.iter() {
-        let variant_char = variant.get_unit_char();
-        let mut test_grid = (*grid).clone();
-        let mut compatible = true;
-        // check units for solid/solid sovrappositions
-        // and update grid accordingly
-        for (n, shape_unit) in variant.units.iter().enumerate() {
-            let (x, y) = (n % 3, n / 3);
-            // checks only on solid units
-            if *shape_unit == Unit::Empty {
-                continue;
+    let mut configs: Vec<(Grid, ShapeId, u16)> = vec![];
+    for (shape_id, shape_variants) in shapes.iter() {
+        for variant in shape_variants.iter() {
+            let variant_char = variant.get_unit_char();
+            let mut test_grid = (*grid).clone();
+            let mut compatible = true;
+            // check units for solid/solid sovrappositions
+            // and update grid accordingly
+            for (n, shape_unit) in variant.units.iter().enumerate() {
+                let (x, y) = (n % 3, n / 3);
+                // checks only on solid units
+                if *shape_unit == Unit::Empty {
+                    continue;
+                }
+                //unit grid is occupied, go to next variant
+                if let Unit::Solid(_) = test_grid[(pos.0 + x, pos.1 + y)] {
+                    compatible = false;
+                    break;
+                } else {
+                    test_grid[(pos.0 + x, pos.1 + y)] = Unit::Solid(variant_char);
+                }
             }
-            //unit grid is occupied, go to next variant
-            if let Unit::Solid(_) = test_grid[(pos.0 + x, pos.1 + y)] {
-                compatible = false;
-                break;
-            } else {
-                test_grid[(pos.0 + x, pos.1 + y)] = Unit::Solid(variant_char) ;
+            if compatible {
+                let score = test_grid.get_potential_score();
+                configs.push((test_grid, *shape_id, score));
             }
-        }
-        if compatible {
-            let score = test_grid.get_potential_score();
-            configs.push((test_grid, score));
         }
     }
     if configs.is_empty() {
-        return None
+        return None;
     }
-    println!("Debug available variants: {}", configs.len());
-    configs.sort_by_key(|(_, score)| *score );
-    Some(configs.last().unwrap().0.clone())
+    configs.sort_by_key(|(_, _, score)| *score);
+    let best_match = configs.last().unwrap();
+    Some((best_match.0.clone(), best_match.1))
+}
+
+fn units_to_check(updated_grid: &Grid, ground: &Ground) -> Vec<(usize, usize)> {
+    // return the remaining units to check
+    updated_grid.get_units_by_nb_priority()
+        .iter()
+        .filter_map(|u_id| 
+            if !ground.checked_units.contains(&u_id) {
+                Some((u_id % updated_grid.width, u_id / updated_grid.width))
+            } else {
+                None
+            }
+        )
+        .collect()
 }
 
 pub fn part_one() {
     let (grounds, shapes) = parse(InputMode::Example);
-    let shapes = shapes.into_iter().map(|s| shape_variants(s)).collect::<Vec<HashSet<Shape>>>();
-    // testing
-    let test_grid = grounds[1].grid.clone();
-    let on_first_shape = arrange_shape_at_pos(&test_grid, (0, 0), &shapes[4]);
-    println!("First Shape");
-    let test_grid = match on_first_shape {
-        Some(new_grid) => {
-            println!("{new_grid}");
-            new_grid
+    let shapes = shapes
+        .into_iter()
+        .map(|s| shape_variants(s))
+        .collect::<Vec<HashSet<Shape>>>();
+    // testing ground 0
+    let mut ground = grounds[1].clone();
+    let mut shapes_required = ground.required_shapes;
+    let mut grid = ground.grid.clone();
+    let mut grid_units = units_to_check(&grid, &ground);
+    println!(
+        "Ground 1 {}-{}, shapes required: {shapes_required:?}",
+        grid.width, grid.height
+    );
+
+    let mut n=0;
+    while grid_units.len() != 0 && n < 50{
+        n +=1;
+        let (x, y) = grid_units.first().unwrap();
+        ground.unit_checked((*x, *y));
+        
+        let shapes_available = shapes_required
+            .iter()
+            .enumerate()
+            .filter_map(|(n, s)| if *s > 0 { Some((n, &shapes[n])) } else { None })
+            .collect::<Vec<(usize, &HashSet<Shape>)>>();
+
+        let try_to_fit_shape = fit_shape_at_pos(&grid, (*x, *y), &shapes_available);
+        match try_to_fit_shape {
+            Some((new_grid, with_shape)) => {
+                shapes_required[with_shape] -= 1;
+                grid = new_grid;
+                println!("Shap {with_shape} fit in grid\n{grid}");
+            }
+            None => {
+                // println!("Cant fit any shape in {x}, {y}");
+            }
         }
-        None =>  {
-            panic!("fail to apply first shape");
+        if shapes_required.iter().sum::<u8>() == 0 {
+            println!("Final Configuration:\n{grid}");
+            break;
         }
-    };
-    let on_second_shape = arrange_shape_at_pos(&test_grid, (1, 1), &shapes[4]);
-    println!("Second Shape");
-    let test_grid = match on_second_shape {
-        Some(new_grid) => {
-            println!("{new_grid}");
-            new_grid
-        }
-        None =>  {
-            panic!("fail to apply second shape");
-        }
-    };
-    let on_thirds_shape = arrange_shape_at_pos(&test_grid, (3, 0), &shapes[0]);
-    println!("Second Shape");
-    let test_grid = match on_thirds_shape {
-        Some(new_grid) => {
-            println!("{new_grid}");
-            new_grid
-        }
-        None =>  {
-            panic!("fail to apply second shape");
-        }
-    };
+        
+        grid_units = units_to_check(&grid, &ground);
+    }
+    // let on_second_shape = fit_shape_at_pos(&test_grid, (1, 1), &shapes);
+    // println!("Second Shape");
+    // let test_grid = match on_second_shape {
+    //     Some(new_grid) => {
+    //         println!("{new_grid}");
+    //         new_grid
+    //     }
+    //     None =>  {
+    //         panic!("fail to apply second shape");
+    //     }
+    // };
+    // let on_thirds_shape = fit_shape_at_pos(&test_grid, (3, 0), &shapes);
+    // println!("Second Shape");
+    // let test_grid = match on_thirds_shape {
+    //     Some(new_grid) => {
+    //         println!("{new_grid}");
+    //         new_grid
+    //     }
+    //     None =>  {
+    //         panic!("fail to apply second shape");
+    //     }
+    // };
 }
