@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 use super::InputMode;
 use anyhow::Result;
-use std::{fmt::Display, ops::{Index, Not}};
+use std::{fmt::Display, ops::{Index, IndexMut, Not}};
+use std::collections::HashSet;
 
 // Some random thought about this problem
 // I could assign a score potential to a grid configuration based on empty positions '.' and its neighbour
@@ -22,7 +23,7 @@ use std::{fmt::Display, ops::{Index, Not}};
 // OR....
 // Use the edge of shapes like a jigsaw puzzle
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 enum Unit {
     Solid,
     Empty,
@@ -61,6 +62,7 @@ enum MatchScore {
     PerfectFit,
     WithGap{ gap_pos: u8 }
 }
+#[derive(Hash, PartialEq, Eq)]
 struct Shape {
     units: [Unit; 9],
     display: (char, char),
@@ -243,6 +245,7 @@ impl Display for Shape {
     }
 }
 
+#[derive(Clone)]
 struct Grid {
     width: usize,
     height: usize,
@@ -336,6 +339,15 @@ impl Index<(usize, usize)> for Grid {
     }
 }
 
+impl IndexMut<(usize, usize)> for Grid {
+    fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut Self::Output {
+        if x >= self.width || y >= self.height {
+            panic!("Grid: Out of index");
+        }
+        &mut self.units[x * self.width + y]
+    }
+}
+
 impl<'a> Iterator for GridIterator<'a> {
     type Item = &'a Unit;
 
@@ -368,6 +380,7 @@ impl Ground {
             required_shapes,
         }
     }
+
 }
 
 fn parse(mode: InputMode) -> (Vec<Ground>, Vec<Shape>) {
@@ -426,20 +439,51 @@ fn parse(mode: InputMode) -> (Vec<Ground>, Vec<Shape>) {
     (grounds, shapes)
 }
 
+fn shape_variants(original: Shape) -> HashSet<Shape> {
+    let mut variants = HashSet::new();
+    variants.insert(original.flip_h());
+    variants.insert(original.flip_v());
+    variants.insert(original.rotate_cw());
+    variants.insert(original.rotate_ccw());
+    variants.insert(original.rotate_180());
+    variants.insert(original);
+    variants
+}
+
+fn best_shape_at_pos<'a>(grid: &Grid, pos: (usize, usize), shape_variants: &'a HashSet<Shape>) -> Option<&'a Shape> {
+    // out of grid
+    if pos.0 + 2 > grid.width || pos.1 + 2 > grid.height {
+        return None
+    }
+    let mut configs: Vec<(&Shape, u16)> = vec![];
+    for variant in shape_variants.iter() {
+        let mut test_grid = (*grid).clone();
+        for y in  pos.1..pos.1+3 {
+            for x in pos.0..pos.0+3 {
+                //unit grid is occupied, return none
+                if let Unit::Solid = test_grid[(x,y)] {
+                    return None;
+                } else {
+                    test_grid[(x, y)] = Unit::Solid;
+                }
+            }
+        }
+        configs.push((variant, test_grid.get_potential_score()));
+    }
+    if configs.is_empty() {
+        return None
+    }
+    configs.sort_by_key(|(_, score)| *score );
+    Some(configs.last().unwrap().0)
+}
+
 pub fn part_one() {
     let (grounds, shapes) = parse(InputMode::Example);
+    let shapes = shapes.into_iter().map(|s| shape_variants(s)).collect::<Vec<HashSet<Shape>>>();
+    let best_fit = best_shape_at_pos(&grounds[0].grid, (0, 0), &shapes[4]);
+    // match best_fit {
+    //     Some(s) => println!("{s}"),
+    //     None => println!("Naain"),
+    // }
 
-    let test_shape = shapes.iter().nth(1).unwrap();
-    // testing correct parsing
-    println!("Original:{}", test_shape);
-    let test_flipped_h_shape = test_shape.flip_h();
-    println!("Flipped H:{}", test_flipped_h_shape);
-    let test_flipped_v_shape = test_shape.flip_v();
-    println!("Flipped V:{}", test_flipped_v_shape);
-    let test_rotate_cw_shape = test_shape.rotate_cw();
-    println!("Rotate CW:{}", test_rotate_cw_shape);
-    let test_rotate_ccw_shape = test_shape.rotate_ccw();
-    println!("Rotate CCW:{}", test_rotate_ccw_shape);
-    let test_rotate_180_shape = test_shape.rotate_180();
-    println!("Rotate 180:{}", test_rotate_180_shape);
 }
