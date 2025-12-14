@@ -247,7 +247,6 @@ impl Grid {
     }
 
     fn check_out_of_grid(&self, pos: (isize, isize)) -> bool {
-        println!("Checking pos {}.{} for grid: {}.{}", pos.0, pos.1, self.width,self.height);
         pos.0 < 0 || pos.0 >= self.width as isize || pos.1 < 0 || pos.1 >= self.height as isize
     }
 
@@ -256,7 +255,6 @@ impl Grid {
         for dir in NB4 {
             let pos_to_check = (pos.0 as isize + dir.0, pos.1 as isize + dir.1);
             if self.check_out_of_grid(pos_to_check) {
-                println!("Pos {}-{} out of grid",pos_to_check.0, pos_to_check.1);
                 continue;
             }
             if let Unit::Empty = self[((pos_to_check.0) as usize, (pos_to_check.1) as usize)] 
@@ -311,7 +309,7 @@ impl Index<(usize, usize)> for Grid {
         if x >= self.width || y >= self.height {
             panic!("Grid: Out of index");
         }
-        &self.units[x * self.width + y]
+        &self.units[y * self.width + x]
     }
 }
 
@@ -320,7 +318,7 @@ impl IndexMut<(usize, usize)> for Grid {
         if x >= self.width || y >= self.height {
             panic!("Grid: Out of index");
         }
-        &mut self.units[x * self.width + y]
+        &mut self.units[y * self.width + x]
     }
 }
 
@@ -486,6 +484,17 @@ pub fn part_one() {
     let on_second_shape = arrange_shape_at_pos(&test_grid, (1, 1), &shapes[4]);
     println!("Second Shape");
     let test_grid = match on_second_shape {
+        Some(new_grid) => {
+            println!("{new_grid}");
+            new_grid
+        }
+        None =>  {
+            panic!("fail to apply second shape");
+        }
+    };
+    let on_thirds_shape = arrange_shape_at_pos(&test_grid, (3, 0), &shapes[0]);
+    println!("Second Shape");
+    let test_grid = match on_thirds_shape {
         Some(new_grid) => {
             println!("{new_grid}");
             new_grid
