@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 use super::InputMode;
-use anyhow::Result;
 use std::{fmt::Display, ops::{Index, IndexMut, Not}};
 use std::collections::HashSet;
 
@@ -25,7 +24,7 @@ use std::collections::HashSet;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 enum Unit {
-    Solid,
+    Solid(char),
     Empty,
 }
 
@@ -65,61 +64,32 @@ enum MatchScore {
 #[derive(Hash, PartialEq, Eq)]
 struct Shape {
     units: [Unit; 9],
-    display: (char, char),
 }
 
 impl Shape {
-    fn from_str(input: &[&str], display: (char, char)) -> Self {
+    fn from_str(input: &[&str], display_char: char) -> Self {
         let mut units = [Unit::Empty; 9];
         let chars = input.iter().flat_map(|i| i.chars());
         for (n, c) in chars.enumerate() {
             match c {
-                '#' => units[n] = Unit::Solid,
+                '#' => units[n] = Unit::Solid(display_char),
                 '.' => units[n] = Unit::Empty,
                 _ => panic!(),
             }
         }
-        Self { units, display }
+        Self { units}
     }
 
-    // 0 1 2
-    // 3 4 5
-    // 6 7 8
-    fn get_edge<'a>(&'a self, side: &EdgeSide) -> EdgeUnits<'a> {
-        match side {
-            EdgeSide::Top => [&self.units[0], &self.units[1], &self.units[2]],
-            EdgeSide::Right => [&self.units[2], &self.units[5], &self.units[8]],
-            EdgeSide::Bottom => [&self.units[6], &self.units[7], &self.units[7]],
-            EdgeSide::Left => [&self.units[0], &self.units[3], &self.units[6]],
-        }
-    }
-
-    fn match_edges(&self, other: Self, contact_edge: EdgeSide) -> MatchScore {
-        let this_edge = self.get_edge(&contact_edge);
-        let other_edge = other.get_edge(&!contact_edge);
-        for i in 0..3 {
-            if this_edge[i] == &Unit::Solid && other_edge[i] == &Unit::Solid {
-                return MatchScore::Incompatible
-            }
-        }
-        // from here when the unit is the same it implies its an empty,
-        // or should have returned in the loop ahead
-        if this_edge[0] != other_edge[0] && this_edge[1] != other_edge[1] && this_edge[2] != other_edge[2] {
-            return MatchScore::PerfectFit
-        }
-        if this_edge[0] == other_edge[0] && this_edge[1] != other_edge[1] && this_edge[2] != other_edge[2] {
-            return MatchScore::WithGap { gap_pos: 1 }
-        }
-        if this_edge[0] != other_edge[0] && this_edge[1] == other_edge[1] && this_edge[2] != other_edge[2] {
-            return MatchScore::WithGap { gap_pos: 2 }
-        }
-        if this_edge[0] != other_edge[0] && this_edge[1] != other_edge[1] && this_edge[2] == other_edge[2] {
-            return MatchScore::WithGap { gap_pos: 3 }
-        }
-        // there should not be an combinations
-        // because edge has at least 1 solid unit
-        // so max 1 gap is possible
-        unreachable!()
+    fn get_unit_char(&self) -> char {
+        *self.units.iter()
+            .filter_map(|u|
+                if let Unit::Solid(c) = u {
+                    Some(c)
+                } else {
+                    None
+                })
+            .next()
+            .unwrap()
     }
 
     // Flip Horizontal
@@ -138,8 +108,7 @@ impl Shape {
         new_units[7] = self.units[7];
         new_units[8] = self.units[6];
         Self {
-            units: new_units,
-            display: self.display
+            units: new_units
         }
     }
 
@@ -160,7 +129,6 @@ impl Shape {
         new_units[8] = self.units[2];
         Self {
             units: new_units,
-            display: self.display
         }
     }
 
@@ -181,7 +149,6 @@ impl Shape {
         new_units[8] = self.units[2];
         Self {
             units: new_units,
-            display: self.display
         }
     }
 
@@ -202,7 +169,6 @@ impl Shape {
         new_units[8] = self.units[6];
         Self {
             units: new_units,
-            display: self.display
         }
     }
 
@@ -223,12 +189,22 @@ impl Shape {
         new_units[8] = self.units[0];
         Self {
             units: new_units,
-            display: self.display
         }
     }
 
 }
 
+// access the grid with Grid[(x, y)]
+impl Index<(usize, usize)> for Shape {
+    type Output = Unit;
+
+    fn index(&self, (x, y): (usize, usize)) -> &Self::Output {
+        if x >= 3 || y >= 3 {
+            panic!("Shape: Out of index");
+        }
+        &self.units[x * 3 + y]
+    }
+}
 impl Display for Shape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = "".to_string();
@@ -237,8 +213,8 @@ impl Display for Shape {
                 output.push_str("\n");
             }
             match unit {
-                Unit::Solid => output = format!("{output}{}", self.display.0),
-                Unit::Empty => output = format!("{output}{}", self.display.1),
+                Unit::Solid(c) => output = format!("{output}{}", c),
+                Unit::Empty => output = format!("{output}." ),
             }
         }
         write!(f, "{}", output)
@@ -270,7 +246,8 @@ impl Grid {
         }
     }
 
-    fn check_pos(&self, pos: (isize, isize)) -> bool {
+    fn check_out_of_grid(&self, pos: (isize, isize)) -> bool {
+        println!("Checking pos {}.{} for grid: {}.{}", pos.0, pos.1, self.width,self.height);
         pos.0 < 0 || pos.0 >= self.width as isize || pos.1 < 0 || pos.1 >= self.height as isize
     }
 
@@ -278,7 +255,8 @@ impl Grid {
         let mut counter = 0u8;
         for dir in NB4 {
             let pos_to_check = (pos.0 as isize + dir.0, pos.1 as isize + dir.1);
-            if self.check_pos(pos_to_check) {
+            if self.check_out_of_grid(pos_to_check) {
+                println!("Pos {}-{} out of grid",pos_to_check.0, pos_to_check.1);
                 continue;
             }
             if let Unit::Empty = self[((pos_to_check.0) as usize, (pos_to_check.1) as usize)] 
@@ -295,15 +273,13 @@ impl Grid {
         })
     }
 
-    fn add_shape(&mut self, shape: &Grid, at_pos: (usize, usize)) -> Result<()> {
-        for (n, unit) in shape.units.iter().enumerate() {
-            let pos = ((n % shape.width) + at_pos.0, (n / shape.width) + at_pos.1);
-            if self.check_pos((pos.0 as isize, pos.1 as isize)) {
-                self.units[pos.0 + pos.1 * self.width] = unit.clone();
-            }
-        }
-        Ok(())
-    }
+    // fn apply_shape(&mut self, shape: &Shape, at_pos: (usize, usize)) {
+    //     for (n, unit) in shape.units.iter().enumerate() {
+    //         let shape_pos = ((n % 3), (n / 3));
+    //         let grid_pos = (shape_pos.0 + at_pos.0, shape_pos.1 + at_pos.1);
+    //         self[grid_pos] = unit.clone();
+    //     }
+    // }
 }
 
 impl Display for Grid {
@@ -314,8 +290,8 @@ impl Display for Grid {
                 output.push_str("\n");
             }
             match unit {
-                Unit::Solid => output = format!("{output}{}", self.display.0),
-                Unit::Empty => output = format!("{output}{}", self.display.1),
+                Unit::Solid(c) => output = format!("{output}{c}"),
+                Unit::Empty => output = format!("{output}."),
             }
         }
         write!(f, "{}", output)
@@ -375,6 +351,7 @@ impl Ground {
             required_shapes[n] = r.parse::<u8>().unwrap();
         }
         let grid = Grid::new_empty(grid_width.parse().unwrap(), grid_height.parse().unwrap());
+        // println!("Created ground with size {}-{}", grid_width, grid_height);
         Self {
             grid,
             required_shapes,
@@ -431,7 +408,7 @@ fn parse(mode: InputMode) -> (Vec<Ground>, Vec<Shape>) {
     let block_visuals = ['A', 'B', 'C', 'D', 'E', 'F'];
     for (n, shape) in blocks.iter().enumerate() {
         let s_line: Vec<&str> = shape.lines().collect();
-        shapes.push(Shape::from_str(&s_line[1..], (block_visuals[n], '.')));
+        shapes.push(Shape::from_str(&s_line[1..], block_visuals[n]));
     }
     for g in grounds_str {
         grounds.push(Ground::from_str(g));
@@ -450,40 +427,71 @@ fn shape_variants(original: Shape) -> HashSet<Shape> {
     variants
 }
 
-fn best_shape_at_pos<'a>(grid: &Grid, pos: (usize, usize), shape_variants: &'a HashSet<Shape>) -> Option<&'a Shape> {
+// return the best grid configuration with shape applied
+fn arrange_shape_at_pos<'a>(grid: &Grid, pos: (usize, usize), shape_variants: &'a HashSet<Shape>) -> Option<Grid> {
     // out of grid
     if pos.0 + 2 > grid.width || pos.1 + 2 > grid.height {
         return None
     }
-    let mut configs: Vec<(&Shape, u16)> = vec![];
+    let mut configs: Vec<(Grid, u16)> = vec![];
     for variant in shape_variants.iter() {
+        let variant_char = variant.get_unit_char();
         let mut test_grid = (*grid).clone();
-        for y in  pos.1..pos.1+3 {
-            for x in pos.0..pos.0+3 {
-                //unit grid is occupied, return none
-                if let Unit::Solid = test_grid[(x,y)] {
-                    return None;
-                } else {
-                    test_grid[(x, y)] = Unit::Solid;
-                }
+        let mut compatible = true;
+        // check units for solid/solid sovrappositions
+        // and update grid accordingly
+        for (n, shape_unit) in variant.units.iter().enumerate() {
+            let (x, y) = (n % 3, n / 3);
+            // checks only on solid units
+            if *shape_unit == Unit::Empty {
+                continue;
+            }
+            //unit grid is occupied, go to next variant
+            if let Unit::Solid(_) = test_grid[(pos.0 + x, pos.1 + y)] {
+                compatible = false;
+                break;
+            } else {
+                test_grid[(pos.0 + x, pos.1 + y)] = Unit::Solid(variant_char) ;
             }
         }
-        configs.push((variant, test_grid.get_potential_score()));
+        if compatible {
+            let score = test_grid.get_potential_score();
+            configs.push((test_grid, score));
+        }
     }
     if configs.is_empty() {
         return None
     }
+    println!("Debug available variants: {}", configs.len());
     configs.sort_by_key(|(_, score)| *score );
-    Some(configs.last().unwrap().0)
+    Some(configs.last().unwrap().0.clone())
 }
 
 pub fn part_one() {
     let (grounds, shapes) = parse(InputMode::Example);
     let shapes = shapes.into_iter().map(|s| shape_variants(s)).collect::<Vec<HashSet<Shape>>>();
-    let best_fit = best_shape_at_pos(&grounds[0].grid, (0, 0), &shapes[4]);
-    // match best_fit {
-    //     Some(s) => println!("{s}"),
-    //     None => println!("Naain"),
-    // }
-
+    // testing
+    let test_grid = grounds[1].grid.clone();
+    let on_first_shape = arrange_shape_at_pos(&test_grid, (0, 0), &shapes[4]);
+    println!("First Shape");
+    let test_grid = match on_first_shape {
+        Some(new_grid) => {
+            println!("{new_grid}");
+            new_grid
+        }
+        None =>  {
+            panic!("fail to apply first shape");
+        }
+    };
+    let on_second_shape = arrange_shape_at_pos(&test_grid, (1, 1), &shapes[4]);
+    println!("Second Shape");
+    let test_grid = match on_second_shape {
+        Some(new_grid) => {
+            println!("{new_grid}");
+            new_grid
+        }
+        None =>  {
+            panic!("fail to apply second shape");
+        }
+    };
 }
