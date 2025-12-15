@@ -1,29 +1,9 @@
 #![allow(dead_code)]
 use super::InputMode;
-use std::collections::{HashMap,HashSet};
 use std::{
     fmt::Display,
     ops::{Index, IndexMut},
 };
-
-// Some random thought about this problem
-// I could assign a score potential to a grid configuration based on empty positions '.' and its neighbour
-// calculate the sum of empty neihbours for each empty space. For example a grid:
-// ..
-// ..
-// has a score of 8 becuase each space have 2 empty neighbours. The grid:
-// ...
-// ...
-// ...
-// has a score of 24 (from top left to bottom right: ( 2 + 3 + 2 + 3 + 4 + 3 + 2 + 3 + 2)
-// // Again:
-// ..#
-// ...
-// .#.
-// has a score of 13 (2 + 2 + 0 + 3 + 3 + 1 + 1 + 0 + 1)
-//
-// OR....
-// Use the edge of shapes like a jigsaw puzzle
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 enum Unit {
@@ -34,16 +14,50 @@ enum Unit {
 // NeighBour 4 directions
 const NB4: [(isize, isize); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
 
-type ShapeId = usize;
-
-// gap position is one-dimensional
-// from left (best) to right (worst)
-// from top (best) to bottom (worst)
-enum MatchScore {
-    Incompatible,
-    PerfectFit,
-    WithGap { gap_pos: u8 },
+struct Problem {
+    grid_size: (usize, usize),
+    required_shapes: [u16; 6],
 }
+impl Problem {
+    fn from_str(input: &str) -> Self {
+        let mut required_shapes = [0; 6];
+        let (size_str, reqs) = input.split_once(":").unwrap();
+        let (grid_width, grid_height) = size_str.split_once("x").unwrap();
+        for (n, r) in reqs.trim().split_whitespace().enumerate() {
+            required_shapes[n] = r.parse::<u16>().unwrap();
+        }
+        // println!("Created ground with size {}-{}", grid_width, grid_height);
+        Self {
+            grid_size: (grid_width.parse().unwrap(), grid_height.parse().unwrap()),
+            required_shapes,
+        }
+    }
+}
+
+type ShapeId = usize;
+type ShapeSpace<'a> = [&'a Unit; 9];
+type ShapeEdge<'a> = [&'a Unit; 3];
+
+enum EdgeSide {
+    Top,
+    Right,
+    Bottom,
+    Left
+}
+#[derive(Eq, PartialEq)]
+enum EdgeKind{
+    Full,
+    Clear,
+    OneGap(u8),
+    TwoGap((u8,u8)),
+}
+
+impl PartialOrd for EdgeKind {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        todo!()
+    }
+}
+
 #[derive(Hash, PartialEq, Eq)]
 struct Shape {
     units: [Unit; 9],
@@ -61,6 +75,25 @@ impl Shape {
             }
         }
         Self { units }
+    }
+
+    fn get_edge<'a>(&'a self, side: EdgeSide) -> EdgeKind {
+        let edge = match side {
+            EdgeSide::Top => [&self.units[0], &self.units[1], &self.units[2]],
+            EdgeSide::Right => [&self.units[2], &self.units[5], &self.units[8]],
+            EdgeSide::Bottom => [&self.units[6], &self.units[7], &self.units[8]],
+            EdgeSide::Left => [&self.units[0], &self.units[3], &self.units[6]],
+        };
+        match edge {
+            [Unit::Empty, Unit::Empty, Unit::Empty] => EdgeKind::Clear,
+            [Unit::Empty, Unit::Solid(_), Unit::Solid(_)] =>  EdgeKind::OneGap(0),
+            [Unit::Solid(_), Unit::Empty, Unit::Solid(_)] => EdgeKind::OneGap(1),
+            [Unit::Solid(_), Unit::Solid(_), Unit::Empty] => EdgeKind::OneGap(2),
+            [Unit::Empty, Unit::Empty, Unit::Solid(_)] => EdgeKind::TwoGap((0,1)),
+            [Unit::Empty, Unit::Solid(_), Unit::Empty] => EdgeKind::TwoGap((0,2)),
+            [Unit::Solid(_), Unit::Empty, Unit::Empty] => EdgeKind::TwoGap((1,2)),
+            [Unit::Solid(_), Unit::Solid(_), Unit::Solid(_)] => EdgeKind::Full,
+        }
     }
 
     fn get_unit_char(&self) -> char {
@@ -239,6 +272,22 @@ impl Grid {
         }
         counter
     }
+
+    // shape space is a sub grid of 3x3 starting at top left position (pos)
+    fn get_shape_space<'a>(&'a self, pos: (usize, usize)) -> ShapeSpace<'a> {
+        [
+            &self[(pos.0, pos.1)],
+            &self[(pos.0 + 1, pos.1)],
+            &&self[(pos.0 + 2, pos.1)],
+            &self[(pos.0, pos.1 + 1)],
+            &self[(pos.0 + 1, pos.1 + 1)],
+            &self[(pos.0 + 2, pos.1 + 1)],
+            &self[(pos.0, pos.1 + 2)],
+            &self[(pos.0 + 1, pos.1 + 2)],
+            &self[(pos.0 + 2, pos.1 + 2)],
+        ]
+    }
+
     fn get_potential_score(&self) -> u16 {
         self.units.iter().enumerate().fold(0u16, |acc, (n, _)| {
             let potential = self.count_empty_neighbour((n % self.width, n / self.width)) as u16;
@@ -248,17 +297,25 @@ impl Grid {
 
     // this return a map with empty units index and number of its neihbourhood as value
     fn get_units_by_nb_priority(&self) -> Vec<usize> {
-        let mut priority: Vec<(usize, u8)> = self.units.iter().enumerate().filter_map(|(n, u)| {
-            if *u == Unit::Empty {
-                let (unit_id, nb_count) = (n, self.count_empty_neighbour((n % self.width, n / self.width)));
-                Some((unit_id, nb_count))
-            } else {
-                None
-            }
-        }).collect();
+        let mut priority: Vec<(usize, u8)> = self
+            .units
+            .iter()
+            .enumerate()
+            .filter_map(|(n, u)| {
+                let (x, y) = (n % self.width, n / self.width);
+                if *u == Unit::Empty && x + 2 < self.width && y + 2 < self.height{
+                    let (unit_id, nb_count) = (
+                        n,
+                        self.count_empty_neighbour((n % self.width, n / self.width)),
+                    );
+                    Some((unit_id, nb_count))
+                } else {
+                    None
+                }
+            })
+            .collect();
         priority.sort_by_key(|p| p.1);
         priority.iter().map(|p| p.0).collect()
-
     }
     // fn apply_shape(&mut self, shape: &Shape, at_pos: (usize, usize)) {
     //     for (n, unit) in shape.units.iter().enumerate() {
@@ -326,36 +383,126 @@ impl<'a> Iterator for GridIterator<'a> {
     }
 }
 
-#[derive(Clone)]
-struct Ground {
-    grid: Grid,
-    required_shapes: [u8; 6],
-    checked_units: Vec<usize>,
+struct Candidates {
+    shapes: Vec<(usize, Shape)>,
+    counter: [u16; 6],
 }
-impl Ground {
-    fn from_str(input: &str) -> Self {
-        let mut required_shapes = [0; 6];
-        let (size_str, reqs) = input.split_once(":").unwrap();
-        let (grid_width, grid_height) = size_str.split_once("x").unwrap();
-        for (n, r) in reqs.trim().split_whitespace().enumerate() {
-            required_shapes[n] = r.parse::<u8>().unwrap();
+impl Candidates {
+    fn new(input_shapes: Vec<Shape>) -> Self {
+        let counter = [0; 6];
+        let mut shapes: Vec<(usize, Shape)> = vec![];
+        for (n, original) in input_shapes.into_iter().enumerate() {
+            shapes.push((n, original.flip_h()));
+            shapes.push((n, original.flip_v()));
+            shapes.push((n, original.rotate_cw()));
+            shapes.push((n, original.rotate_ccw()));
+            shapes.push((n, original.rotate_180()));
+            shapes.push((n, original));
         }
-        let grid = Grid::new_empty(grid_width.parse().unwrap(), grid_height.parse().unwrap());
-        // println!("Created ground with size {}-{}", grid_width, grid_height);
-        Self {
-            grid,
-            required_shapes,
-            checked_units: vec![]
+        //todo: Order here based on units
+        // prefer left and top edge solid
+        // center unit empty
+        // right and bottom whatever
+        // shapes.sort_by(|a, b| {
+        //     let a_left = 
+        // });
+        Self { shapes, counter }
+    }
+    fn reset_counter(&mut self, new_counter: [u16; 6]) {
+        self.counter = new_counter;
+    }
+
+    fn left(&self) -> u16 {
+        self.counter.iter().sum()
+    }
+
+    fn get(&mut self, space: [&Unit; 9]) -> &Shape {
+        todo!()
+    }
+}
+
+// get the unit_position based on chosen sort function
+fn get_next_unit(from_grid: &Grid, exclude: &[(usize, usize)]) -> Option<(usize, usize)> {
+    let next_unit_id = from_grid
+        .get_units_by_nb_priority()
+        .iter()
+        .copied()
+        .filter_map(|u_id| if !exclude.contains(&(u_id % from_grid.width, u_id / from_grid.width)) {
+            Some((u_id % from_grid.width, u_id / from_grid.width))
+        } else {
+            None
+        })
+        .next();
+    next_unit_id
+}
+
+#[allow(unused)]
+pub fn part_one() {
+    let (mut problems, shapes) = parse(InputMode::Example);
+    let mut candidates = Candidates::new(shapes);
+
+    // testing ground
+    let problem = problems.remove(1);
+    candidates.reset_counter(problem.required_shapes);
+    let (grid_width, grid_height) = problem.grid_size;
+    let mut grid = Grid::new_empty(grid_width, grid_height);
+    println!(
+        "Problem 1: {}-{}, shapes required: {:?}",
+        problem.grid_size.0, problem.grid_size.1, problem.required_shapes
+    );
+
+    //here should start a loop for problems
+    let mut visited_units: Vec<(usize, usize)> = vec![];
+
+    while candidates.left() != 0 {
+        let next_unit_to_check = get_next_unit(&grid, &visited_units);
+        match next_unit_to_check {
+            Some(unit_pos) => {
+                let space_to_check = grid.get_shape_space(unit_pos);
+                println!("Visiting {} {}", unit_pos.0, unit_pos.1);
+                visited_units.push(unit_pos);
+            }
+            None => {
+                // no more explorable units
+                break;
+            }
         }
     }
 
-    fn unit_checked(&mut self, pos: (usize, usize)) {
-        let unit_id = pos.1 * self.grid.width + pos.0;
-        self.checked_units.push(unit_id);
-    }
+
+    // let mut n=0;
+    // while grid_units.len() != 0 && n < 50{
+    //     n +=1;
+    //     let (x, y) = grid_units.first().unwrap();
+    //     ground.unit_checked((*x, *y));
+    //
+    //     let shapes_available = shapes_required
+    //         .iter()
+    //         .enumerate()
+    //         .filter_map(|(n, s)| if *s > 0 { Some((n, &shapes[n])) } else { None })
+    //         .collect::<Vec<(usize, &HashSet<Shape>)>>();
+    //
+    //     let try_to_fit_shape = fit_shape_at_pos(&grid, (*x, *y), &shapes_available);
+    //     match try_to_fit_shape {
+    //         Some((new_grid, with_shape)) => {
+    //             shapes_required[with_shape] -= 1;
+    //             grid = new_grid;
+    //             println!("Shap {with_shape} fit in grid\n{grid}");
+    //         }
+    //         None => {
+    //             // println!("Cant fit any shape in {x}, {y}");
+    //         }
+    //     }
+    //     if shapes_required.iter().sum::<u8>() == 0 {
+    //         println!("Final Configuration:\n{grid}");
+    //         break;
+    //     }
+    //
+    //     grid_units = units_to_check(&grid, &ground);
+    // }
 }
 
-fn parse(mode: InputMode) -> (Vec<Ground>, Vec<Shape>) {
+fn parse(mode: InputMode) -> (Vec<Problem>, Vec<Shape>) {
     let input: String;
     match mode {
         InputMode::Example => {
@@ -396,7 +543,7 @@ fn parse(mode: InputMode) -> (Vec<Ground>, Vec<Shape>) {
         }
         InputMode::Normal => todo!(),
     }
-    let mut grounds: Vec<Ground> = vec![];
+    let mut grounds: Vec<Problem> = vec![];
     let mut shapes: Vec<Shape> = vec![];
     let mut blocks: Vec<&str> = input.split("\n\n").collect();
     let grounds_str = blocks.pop().unwrap().lines().collect::<Vec<&str>>();
@@ -406,148 +553,67 @@ fn parse(mode: InputMode) -> (Vec<Ground>, Vec<Shape>) {
         shapes.push(Shape::from_str(&s_line[1..], block_visuals[n]));
     }
     for g in grounds_str {
-        grounds.push(Ground::from_str(g));
+        grounds.push(Problem::from_str(g));
     }
     (grounds, shapes)
 }
 
-fn shape_variants(original: Shape) -> HashSet<Shape> {
-    let mut variants = HashSet::new();
-    variants.insert(original.flip_h());
-    variants.insert(original.flip_v());
-    variants.insert(original.rotate_cw());
-    variants.insert(original.rotate_ccw());
-    variants.insert(original.rotate_180());
-    variants.insert(original);
-    variants
-}
-
 // return the best grid configuration with selected shape applied
-fn fit_shape_at_pos<'a>(
-    grid: &Grid,
-    pos: (usize, usize),
-    shapes: &[(usize, &HashSet<Shape>)],
-) -> Option<(Grid, usize)> {
-    // out of grid
-    if pos.0 + 2 >= grid.width || pos.1 + 2 >= grid.height {
-        return None;
-    }
-    let mut configs: Vec<(Grid, ShapeId, u16)> = vec![];
-    for (shape_id, shape_variants) in shapes.iter() {
-        for variant in shape_variants.iter() {
-            let variant_char = variant.get_unit_char();
-            let mut test_grid = (*grid).clone();
-            let mut compatible = true;
-            // check units for solid/solid sovrappositions
-            // and update grid accordingly
-            for (n, shape_unit) in variant.units.iter().enumerate() {
-                let (x, y) = (n % 3, n / 3);
-                // checks only on solid units
-                if *shape_unit == Unit::Empty {
-                    continue;
-                }
-                //unit grid is occupied, go to next variant
-                if let Unit::Solid(_) = test_grid[(pos.0 + x, pos.1 + y)] {
-                    compatible = false;
-                    break;
-                } else {
-                    test_grid[(pos.0 + x, pos.1 + y)] = Unit::Solid(variant_char);
-                }
-            }
-            if compatible {
-                let score = test_grid.get_potential_score();
-                configs.push((test_grid, *shape_id, score));
-            }
-        }
-    }
-    if configs.is_empty() {
-        return None;
-    }
-    configs.sort_by_key(|(_, _, score)| *score);
-    let best_match = configs.last().unwrap();
-    Some((best_match.0.clone(), best_match.1))
-}
-
-fn units_to_check(updated_grid: &Grid, ground: &Ground) -> Vec<(usize, usize)> {
-    // return the remaining units to check
-    updated_grid.get_units_by_nb_priority()
-        .iter()
-        .filter_map(|u_id| 
-            if !ground.checked_units.contains(&u_id) {
-                Some((u_id % updated_grid.width, u_id / updated_grid.width))
-            } else {
-                None
-            }
-        )
-        .collect()
-}
-
-pub fn part_one() {
-    let (grounds, shapes) = parse(InputMode::Example);
-    let shapes = shapes
-        .into_iter()
-        .map(|s| shape_variants(s))
-        .collect::<Vec<HashSet<Shape>>>();
-    // testing ground 0
-    let mut ground = grounds[1].clone();
-    let mut shapes_required = ground.required_shapes;
-    let mut grid = ground.grid.clone();
-    let mut grid_units = units_to_check(&grid, &ground);
-    println!(
-        "Ground 1 {}-{}, shapes required: {shapes_required:?}",
-        grid.width, grid.height
-    );
-
-    let mut n=0;
-    while grid_units.len() != 0 && n < 50{
-        n +=1;
-        let (x, y) = grid_units.first().unwrap();
-        ground.unit_checked((*x, *y));
-        
-        let shapes_available = shapes_required
-            .iter()
-            .enumerate()
-            .filter_map(|(n, s)| if *s > 0 { Some((n, &shapes[n])) } else { None })
-            .collect::<Vec<(usize, &HashSet<Shape>)>>();
-
-        let try_to_fit_shape = fit_shape_at_pos(&grid, (*x, *y), &shapes_available);
-        match try_to_fit_shape {
-            Some((new_grid, with_shape)) => {
-                shapes_required[with_shape] -= 1;
-                grid = new_grid;
-                println!("Shap {with_shape} fit in grid\n{grid}");
-            }
-            None => {
-                // println!("Cant fit any shape in {x}, {y}");
-            }
-        }
-        if shapes_required.iter().sum::<u8>() == 0 {
-            println!("Final Configuration:\n{grid}");
-            break;
-        }
-        
-        grid_units = units_to_check(&grid, &ground);
-    }
-    // let on_second_shape = fit_shape_at_pos(&test_grid, (1, 1), &shapes);
-    // println!("Second Shape");
-    // let test_grid = match on_second_shape {
-    //     Some(new_grid) => {
-    //         println!("{new_grid}");
-    //         new_grid
-    //     }
-    //     None =>  {
-    //         panic!("fail to apply second shape");
-    //     }
-    // };
-    // let on_thirds_shape = fit_shape_at_pos(&test_grid, (3, 0), &shapes);
-    // println!("Second Shape");
-    // let test_grid = match on_thirds_shape {
-    //     Some(new_grid) => {
-    //         println!("{new_grid}");
-    //         new_grid
-    //     }
-    //     None =>  {
-    //         panic!("fail to apply second shape");
-    //     }
-    // };
-}
+// fn fit_shape_at_pos<'a>(
+//     grid: &Grid,
+//     pos: (usize, usize),
+//     shapes: &[(usize, &HashSet<Shape>)],
+// ) -> Option<(Grid, usize)> {
+//     // out of grid
+//     if pos.0 + 2 >= grid.width || pos.1 + 2 >= grid.height {
+//         return None;
+//     }
+//     let mut configs: Vec<(Grid, ShapeId, u16)> = vec![];
+//     for (shape_id, shape_variants) in shapes.iter() {
+//         for variant in shape_variants.iter() {
+//             let variant_char = variant.get_unit_char();
+//             let mut test_grid = (*grid).clone();
+//             let mut compatible = true;
+//             // check units for solid/solid sovrappositions
+//             // and update grid accordingly
+//             for (n, shape_unit) in variant.units.iter().enumerate() {
+//                 let (x, y) = (n % 3, n / 3);
+//                 // checks only on solid units
+//                 if *shape_unit == Unit::Empty {
+//                     continue;
+//                 }
+//                 //unit grid is occupied, go to next variant
+//                 if let Unit::Solid(_) = test_grid[(pos.0 + x, pos.1 + y)] {
+//                     compatible = false;
+//                     break;
+//                 } else {
+//                     test_grid[(pos.0 + x, pos.1 + y)] = Unit::Solid(variant_char);
+//                 }
+//             }
+//             if compatible {
+//                 let score = test_grid.get_potential_score();
+//                 configs.push((test_grid, *shape_id, score));
+//             }
+//         }
+//     }
+//     if configs.is_empty() {
+//         return None;
+//     }
+//     configs.sort_by_key(|(_, _, score)| *score);
+//     let best_match = configs.last().unwrap();
+//     Some((best_match.0.clone(), best_match.1))
+// }
+//
+// fn units_to_check(updated_grid: &Grid, ground: &Ground) -> Vec<(usize, usize)> {
+//     // return the remaining units to check
+//     updated_grid.get_units_by_nb_priority()
+//         .iter()
+//         .filter_map(|u_id|
+//             if !ground.checked_units.contains(&u_id) {
+//                 Some((u_id % updated_grid.width, u_id / updated_grid.width))
+//             } else {
+//                 None
+//             }
+//         )
+//         .collect()
+// }
