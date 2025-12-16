@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::InputMode;
 use std::{
     fmt::Display,
