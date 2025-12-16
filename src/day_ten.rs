@@ -9,6 +9,9 @@ pub fn part_one() {
     println!("Output: {output}");
 }
 
+// I could not solve part two. The first idea come from
+// https://www.reddit.com/r/adventofcode/comments/1pk87hl/2025_day_10_part_2_bifurcate_your_way_to_victory/
+// while this: rust implementation is coded by https://github.com/janek37/advent-of-code/blob/main/2025/day10.rs
 pub fn part_two() {
     let mut output: Vec<usize> = vec![];
     let machines = parse(InputMode::Normal);
